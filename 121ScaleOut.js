@@ -65,16 +65,25 @@ const { argv } = require('yargs')
   .alias('n', 'disable-scale-out')
   .describe('n', 'Disable scale-out (100% stop only)')
   .default('n', false)
+// '-f <timeInForce>' set the order expiry date/time.
+  .boolean('f')
+  .alias('f', 'tif')
+  .describe('f', 'Time the order expires (YYYY-MM-DD HH:mm:ss')
+  .default('f', false)
   .wrap(process.stdout.columns)
 
 let {
   p: tradingPair, a: tradeAmount, e: entryPrice, s: stopPrice, S: slippage, l: entryLimitOrder,
-  t: entryStopLimitTrigger, T: targetPrice, x: isExchange, h: hiddenExitOrders, c: cancelPrice, n: noScaleOut
+  t: entryStopLimitTrigger, T: targetPrice, x: isExchange, h: hiddenExitOrders, c: cancelPrice, n: noScaleOut,
+  f: timeInForce
 } = argv
 
 console.log('1:1 scale out mode: ' + (noScaleOut ? 'OFF' : 'ON'))
 if (targetPrice) {
   console.log('Fixed target price: ' + targetPrice)
+}
+if (timeInForce) {
+  console.log('Order set to expire at ' + timeInForce)
 }
 
 const bfxExchangeTakerFee = 0.002 // 0.2% 'taker' fee
@@ -96,17 +105,14 @@ require('dotenv').config()
 const { API_KEY, API_SECRET } = process.env
 const { Order } = require('bfx-api-node-models')
 
-const bfx = new BFX({
+let opts = {
   apiKey: API_KEY,
   apiSecret: API_SECRET,
-
-  ws: {
-    autoReconnect: true,
-    seqAudit: false,
-    packetWDDelay: 10 * 1000,
-    transform: true
-  }
-})
+  version: 2,
+  transform: true,
+  autoOpen: true,
+  autoReconnect: true,
+};
 
 if (!stopPrice) {
   console.log("No stop price - for your own safety this will terminate.")
@@ -136,8 +142,11 @@ if (entryStopLimitTrigger !== 0) { // stop limit entry
   entryOrderObj['priceAuxLimit'] = entryPrice
   console.log('entryStopLimitTrigger = ' + entryStopLimitTrigger + ' entryPrice = ' + entryPrice)
 }
+if (timeInForce) {
+  entryOrderObj['tif'] = timeInForce
+}
 
-const ws = bfx.ws(2)
+const ws = new BFX(opts).ws()
 const o = new Order(entryOrderObj, ws)
 
 ws.on('error', (err) => console.error('bfx ws error', err))
